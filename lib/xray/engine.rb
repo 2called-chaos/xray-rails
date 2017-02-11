@@ -10,7 +10,12 @@ module Xray
       def render(*args, &block)
         path = identifier
         view = args.first
-        source = super(*args, &block)
+
+        if Module.respond_to?(:prepend)
+          source = super(*args, &block)
+        else
+          source = render_without_xray(*args, &block)
+        end
 
         suitable_template = !(view.respond_to?(:mailer) && view.mailer) &&
                             !path.include?('_xray_bar') &&
@@ -25,6 +30,7 @@ module Xray
           source
         end
       end
+      alias_method :render_with_xray, :render
     end
 
     initializer "xray.initialize" do |app|
@@ -40,7 +46,12 @@ module Xray
       # Monkey patch ActionView::Template to augment server-side templates
       # with filepath information. See `Xray.augment_template` for details.
       ActionView::Template.class_eval do
-        prepend Xray::Engine::ActionViewPatch
+        if Module.respond_to?(:prepend)
+          prepend Xray::Engine::ActionViewPatch
+        else
+          include Xray::Engine::ActionViewPatch
+          alias_method_chain :render, :xray
+        end
       end
 
       # Sprockets preprocessor interface which supports all versions of Sprockets.
